@@ -7,14 +7,16 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../shared/layout/main_wrapper_screen.dart';
 import '../../features/tickets/presentation/screens/ticket_list_screen.dart';
+import '../../features/tickets/presentation/screens/ticket_detail_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
-// --- IMPORT ADICIONADO ---
-import '../../features/tickets/presentation/screens/ticket_detail_screen.dart'; 
+import '../../features/users/presentation/screens/user_list_screen.dart';
+import '../../features/tickets/presentation/screens/create_ticket_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
+  final canManageUsers = authState.user?.isSupporter ?? false;
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -34,10 +36,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
+          // Passamos o navigationShell para o Wrapper
           return MainWrapperScreen(navigationShell: navigationShell);
         },
         branches: [
-          // Dashboard
+          // Branch 0: Dashboard
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -46,13 +49,19 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Tickets
+          // Branch 1: Tickets
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: '/tickets',
                 builder: (context, state) => const TicketListScreen(),
                 routes: [
+                  // A rota 'create' deve ser definida explicitamente
+                  GoRoute(
+                    path: 'create',
+                    builder: (context, state) => const CreateTicketScreen(),
+                  ),
+                  // A rota dinâmica fica depois
                   GoRoute(
                     path: ':id',
                     builder: (context, state) {
@@ -64,7 +73,17 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Perfil
+          // Branch 2 (Condicional): Utilizadores (Apenas Admin)
+          if (canManageUsers)
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/users',
+                  builder: (context, state) => const UserListScreen(),
+                ),
+              ],
+            ),
+          // Branch 3 (ou 2 se não for admin): Perfil
           StatefulShellBranch(
             routes: [
               GoRoute(

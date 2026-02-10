@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/controllers/auth_controller.dart';
 
-/// Este Widget é o "invólucro" que contém a BottomNavigationBar.
-/// Ele recebe o `child` do GoRouter (o ecrã atual).
-class MainWrapperScreen extends ConsumerStatefulWidget {
+class MainWrapperScreen extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   const MainWrapperScreen({
@@ -14,33 +12,13 @@ class MainWrapperScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<MainWrapperScreen> createState() => _MainWrapperScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
+    final canManageUsers = authState.user?.isSupporter ?? false;
 
-class _MainWrapperScreenState extends ConsumerState<MainWrapperScreen> {
-  @override
-  Widget build(BuildContext context) {
-    final user = ref.watch(authControllerProvider).user;
-    final isSupporter = user?.isSupporter ?? false;
-
-    return Scaffold(
-      body: widget.navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.navigationShell.currentIndex,
-        onDestinationSelected: (index) {
-          widget.navigationShell.goBranch(
-            index,
-            initialLocation: index == widget.navigationShell.currentIndex,
-          );
-        },
-        destinations: _buildDestinations(isSupporter),
-      ),
-    );
-  }
-
-  List<Widget> _buildDestinations(bool isSupporter) {
-    // Menu Base (Comum a todos)
-    final destinations = <Widget>[
+    // Definimos as abas possíveis
+    // A ordem AQUI deve corresponder exatamente à ordem no router.dart
+    final tabs = [
       const NavigationDestination(
         icon: Icon(Icons.dashboard_outlined),
         selectedIcon: Icon(Icons.dashboard),
@@ -51,23 +29,35 @@ class _MainWrapperScreenState extends ConsumerState<MainWrapperScreen> {
         selectedIcon: Icon(Icons.confirmation_number),
         label: 'Tickets',
       ),
-    ];
-
-    // Se for supporter, podemos adicionar menus extra ou alterar a ordem
-    if (isSupporter) {
-      // Exemplo: Supporters poderiam ter um menu "Clientes"
-      // destinations.add(...)
-    }
-
-    // Perfil (Sempre no fim)
-    destinations.add(
+      if (canManageUsers)
+        const NavigationDestination(
+          icon: Icon(Icons.people_outline),
+          selectedIcon: Icon(Icons.people),
+          label: 'Utilizadores',
+        ),
       const NavigationDestination(
         icon: Icon(Icons.person_outline),
         selectedIcon: Icon(Icons.person),
         label: 'Perfil',
       ),
-    );
+    ];
 
-    return destinations;
+    return Scaffold(
+      // O GoRouter já gere o IndexedStack internamente através do navigationShell
+      body: navigationShell,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: navigationShell.currentIndex,
+        destinations: tabs,
+        onDestinationSelected: (index) {
+          // Muda para a branch correspondente
+          navigationShell.goBranch(
+            index,
+            // A flag initialLocation: true garante que ao clicar na tab
+            // voltamos à raiz dessa tab (ex: sair de um detalhe de ticket)
+            initialLocation: index == navigationShell.currentIndex,
+          );
+        },
+      ),
+    );
   }
 }

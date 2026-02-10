@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'ticket_message_model.dart'; // Importa o modelo de mensagens
+import 'package:flutter/material.dart'; // Importante para as Cores
+import '../../../auth/data/models/user_model.dart';
+import 'ticket_message_model.dart';
 
 class TicketModel {
   final int id;
@@ -8,8 +8,10 @@ class TicketModel {
   final String description;
   final String status;
   final String priority;
+  final UserModel? user; 
+  final UserModel? assignedTo;
+  final List<TicketMessageModel> messages;
   final DateTime createdAt;
-  final List<TicketMessageModel> messages; // <--- NOVO CAMPO
 
   TicketModel({
     required this.id,
@@ -17,59 +19,57 @@ class TicketModel {
     required this.description,
     required this.status,
     required this.priority,
+    this.user,
+    this.assignedTo,
+    this.messages = const [],
     required this.createdAt,
-    required this.messages,
   });
 
   factory TicketModel.fromJson(Map<String, dynamic> json) {
-    // Processar a lista de mensagens se ela vier no JSON
-    var messagesList = <TicketMessageModel>[];
-    if (json['messages'] != null) {
-      messagesList = (json['messages'] as List)
-          .map((m) => TicketMessageModel.fromJson(m))
-          .toList();
-    }
-
     return TicketModel(
       id: json['id'],
       title: json['title'] ?? 'Sem Título',
       description: json['description'] ?? '',
       status: json['status'] ?? 'open',
-      priority: json['priority'] ?? 'low',
+      priority: json['priority'] ?? 'medium',
+      user: json['user'] != null ? UserModel.fromJson(json['user']) : null,
+      assignedTo: json['assigned_to'] != null ? UserModel.fromJson(json['assigned_to']) : null,
+      messages: (json['messages'] as List?)
+              ?.map((e) => TicketMessageModel.fromJson(e))
+              .toList() ??
+          [],
       createdAt: DateTime.parse(json['created_at']),
-      messages: messagesList, // <--- Atribui a lista
     );
   }
 
-  // --- Helpers UI (Mantêm-se iguais) ---
-  String get formattedDate => DateFormat('d MMM yyyy').format(createdAt);
-
-  Color get statusColor {
-    switch (status) {
-      case 'open': return Colors.blue;
-      case 'in_progress': return Colors.orange;
-      case 'resolved': return Colors.green;
-      case 'closed': return Colors.grey;
-      default: return Colors.black;
-    }
-  }
+  // --- GETTERS AUXILIARES PARA UI (Resolve erros do TicketCard) ---
 
   String get statusLabel {
     switch (status) {
-      case 'open': return 'Aberto';
-      case 'in_progress': return 'Em Progresso';
       case 'resolved': return 'Resolvido';
       case 'closed': return 'Fechado';
-      default: return status;
+      default: return 'Aberto';
+    }
+  }
+
+  Color get statusColor {
+    switch (status) {
+      case 'resolved': return Colors.green;
+      case 'closed': return Colors.grey;
+      default: return Colors.blue;
     }
   }
 
   Color get priorityColor {
     switch (priority) {
       case 'high': return Colors.red;
-      case 'medium': return Colors.orange.shade800;
-      case 'low': return Colors.green.shade700;
-      default: return Colors.grey;
+      case 'low': return Colors.green;
+      default: return Colors.orange;
     }
+  }
+
+  String get formattedDate {
+    // Formatação simples YYYY-MM-DD
+    return "${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}";
   }
 }
