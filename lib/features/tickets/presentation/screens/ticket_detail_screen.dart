@@ -81,7 +81,10 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     final currentUser = authState.user;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalhes do Ticket')),
+      appBar: AppBar(
+        title: const Text('Detalhes do Ticket'),
+        elevation: 0,
+      ),
       body: ticketState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Erro ao carregar: $err')),
@@ -94,21 +97,22 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
           final isAssignedToMe = ticket.assignedTo?.id == currentUser?.id;
           final isMyTicket = ticket.user?.id == currentUser?.id;
 
-          // Regra: Pode responder se não estiver resolvido E (for o dono OU for o técnico atribuído)
           final canReply = !isResolved && (isMyTicket || isAssignedToMe);
 
           return Column(
             children: [
+              // 1. CABEÇALHO FIXO (Não faz scroll com as mensagens)
+              _buildCollapsibleHeader(ticket),
+
+              // 2. ÁREA DE SCROLL (Apenas para mensagens e avisos)
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.only(bottom: 16),
                   children: [
-                    _buildHeader(ticket),
-                    
-                    // Banner para Suporte se atribuir
+                    // Banner de Suporte
                     if (isSupporter && isUnassigned && !isResolved)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -145,13 +149,13 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                         ),
                       ),
                     
-                    const Divider(),
-                    _buildUserInfos(ticket),
-                    const Divider(),
+                    // Lista de Mensagens
                     _buildChatSection(ticket, currentUser?.id),
                   ],
                 ),
               ),
+
+              // 3. INPUT (Fixo no fundo)
               _buildInputSection(canReply, isSupporter, isUnassigned, ticket),
             ],
           );
@@ -160,30 +164,109 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     );
   }
 
-  Widget _buildHeader(dynamic ticket) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  /// O cabeçalho agora está desenhado para ficar fixo no topo.
+  Widget _buildCollapsibleHeader(dynamic ticket) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            // CORRIGIDO: withOpacity -> withValues
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: true, 
+        // CORRIGIDO: Removido o callback onExpansionChanged e a variável _isHeaderExpanded
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: const Border(), 
+        
+        // TÍTULO (Sempre visível)
+        title: Text(
+          ticket.title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: ticket.statusColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              ticket.formattedDate,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+        
+        // CONTEÚDO (Escondido ao minimizar)
         children: [
-          Text(ticket.title, style: Theme.of(context).textTheme.headlineSmall),
+          const Divider(),
           const SizedBox(height: 8),
+          
           Row(
             children: [
               Chip(
                 label: Text(ticket.statusLabel),
-                backgroundColor: ticket.statusColor.withOpacity(0.2),
+                // CORRIGIDO: withOpacity -> withValues
+                backgroundColor: ticket.statusColor.withValues(alpha: 0.1),
+                labelStyle: TextStyle(color: ticket.statusColor, fontSize: 12, fontWeight: FontWeight.bold),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
               ),
               const SizedBox(width: 8),
               Chip(
-                label: Text(ticket.priority.toUpperCase()),
-                backgroundColor: ticket.priorityColor.withOpacity(0.2),
+                label: Text('Prioridade ${ticket.priority.toUpperCase()}'),
+                // CORRIGIDO: withOpacity -> withValues
+                backgroundColor: ticket.priorityColor.withValues(alpha: 0.1),
+                labelStyle: TextStyle(color: ticket.priorityColor, fontSize: 12, fontWeight: FontWeight.bold),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Text('Descrição:', style: TextStyle(fontWeight: FontWeight.bold)),
-          Text(ticket.description),
+          const SizedBox(height: 12),
+          
+          // Descrição
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Descrição:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ticket.description,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          _buildUserInfos(ticket),
         ],
       ),
     );
@@ -193,15 +276,19 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     return Column(
       children: [
         ListTile(
-          leading: const Icon(Icons.person_outline),
-          title: Text('Criado por: ${ticket.user?.name ?? "Desconhecido"}'),
-          subtitle: Text(ticket.user?.email ?? ""),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: const Icon(Icons.person_outline, size: 20),
+          title: Text(ticket.user?.name ?? "Desconhecido", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          subtitle: Text(ticket.user?.email ?? "", style: const TextStyle(fontSize: 12)),
         ),
         if (ticket.assignedTo != null)
           ListTile(
-            leading: const Icon(Icons.support_agent),
-            title: Text('Técnico responsável: ${ticket.assignedTo!.name}'),
-            subtitle: Text(ticket.assignedTo!.email),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: const Icon(Icons.support_agent, size: 20, color: Colors.blue),
+            title: Text(ticket.assignedTo!.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            subtitle: Text('Técnico Responsável', style: TextStyle(fontSize: 12, color: Colors.blue.shade700)),
           ),
       ],
     );
@@ -212,16 +299,28 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text(
-            'Mensagens (${ticket.messages.length})',
-            style: Theme.of(context).textTheme.titleMedium,
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+          child: Row(
+            children: [
+              const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                'Mensagens (${ticket.messages.length})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                  fontSize: 14
+                ),
+              ),
+            ],
           ),
         ),
         if (ticket.messages.isEmpty)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text('Ainda não existem mensagens.', style: TextStyle(color: Colors.grey))),
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: Text('Ainda não existem mensagens.', style: TextStyle(color: Colors.grey)),
+            ),
           )
         else
           ...ticket.messages.map((msg) => MessageBubble(
@@ -239,11 +338,11 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       blockedMessage = 'Ticket fechado/resolvido.';
     } else if (!canReply) {
       if (isSupporter && isUnassigned) {
-        blockedMessage = 'Atribua o ticket a si para responder.';
+        blockedMessage = 'Necessário atribuir ticket.';
       } else if (isSupporter) {
-        blockedMessage = 'Ticket pertencente a outro técnico.';
+        blockedMessage = 'Ticket de outro técnico.';
       } else {
-        blockedMessage = 'A aguardar ação do suporte.';
+        blockedMessage = 'A aguardar suporte.';
       }
     }
 
@@ -251,37 +350,65 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(blurRadius: 4, color: Colors.black.withOpacity(0.1))],
+        boxShadow: [
+            // CORRIGIDO: withOpacity -> withValues
+            BoxShadow(blurRadius: 4, color: Colors.black.withValues(alpha: 0.05))
+        ],
+        border: const Border(top: BorderSide(color: Colors.black12)),
       ),
       child: SafeArea(
         child: canReply
             ? Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Escrever mensagem...',
-                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       ),
-                      maxLines: null,
+                      maxLines: 4,
+                      minLines: 1,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _isSending
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isSending
+                      ? const Padding(
+                          padding: EdgeInsets.all(10.0),
+                          child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                        )
                       : IconButton(
-                          icon: const Icon(Icons.send, color: Colors.blue),
+                          icon: const Icon(Icons.send, color: Colors.white, size: 20),
                           onPressed: _handleSendMessage,
                         ),
+                  ),
                 ],
               )
             : Center(
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    blockedMessage ?? 'Não pode responder.',
-                    style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Text(
+                        blockedMessage ?? 'Não pode responder.',
+                        style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                      ),
+                    ],
                   ),
                 ),
               ),

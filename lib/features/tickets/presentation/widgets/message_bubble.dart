@@ -28,7 +28,6 @@ class MessageBubble extends StatelessWidget {
         }
       }
     } catch (e) {
-      // CORREÇÃO 1: Usar debugPrint em vez de print
       debugPrint('Erro ao abrir anexo: $e');
     }
   }
@@ -37,7 +36,9 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgColor = isMe ? Colors.blue.shade600 : Colors.grey.shade200;
     final textColor = isMe ? Colors.white : Colors.black87;
+    // O alinhamento interno da coluna: se for eu, alinha à direita (end), senão esquerda (start)
     final align = isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    
     final borderRadius = BorderRadius.only(
       topLeft: const Radius.circular(16),
       topRight: const Radius.circular(16),
@@ -45,7 +46,11 @@ class MessageBubble extends StatelessWidget {
       bottomRight: isMe ? Radius.zero : const Radius.circular(16),
     );
 
-    return Padding(
+    // Envolvemos tudo num Container com width: double.infinity.
+    // Isto força o widget a ocupar toda a largura do ecrã, permitindo que
+    // o CrossAxisAlignment.end empurre visualmente o conteúdo para a direita.
+    return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Column(
         crossAxisAlignment: align,
