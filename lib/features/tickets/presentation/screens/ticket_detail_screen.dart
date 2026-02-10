@@ -1,4 +1,5 @@
-import 'dart:io'; // Import for File
+import 'dart:async'; // [IMPORTANTE] Necessário para o Timer
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/ticket_detail_controller.dart';
@@ -18,20 +19,60 @@ class TicketDetailScreen extends ConsumerStatefulWidget {
 class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
   final _messageController = TextEditingController();
   
-  // Local state to manage the selected file before sending
+  // Estado local para anexo
   File? _selectedAttachment;
   
+  // Estados de carregamento
   bool _isSending = false;
   bool _isAssigning = false;
 
+  // [NOVO] Timer para contar o tempo de suporte automaticamente
+  Timer? _trackingTimer;
+  // Intervalo de 30 segundos para o "heartbeat"
+  static const int _trackingIntervalSeconds = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicia o tracking após o widget ser montado para ter acesso seguro ao ref
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startSupportTracking();
+    });
+  }
+
   @override
   void dispose() {
+    _trackingTimer?.cancel(); // [CRÍTICO] Cancelar timer ao sair do ecrã
     _messageController.dispose();
     super.dispose();
   }
 
+  /// Inicia o contador se o utilizador for Staff
+  void _startSupportTracking() {
+    final authState = ref.read(authControllerProvider);
+    final user = authState.user;
+    
+    // Apenas Staff (Admin/Support) consome tempo do cliente
+    if (user != null && user.isSupporter) {
+      // Cria um timer repetitivo
+      _trackingTimer = Timer.periodic(
+        const Duration(seconds: _trackingIntervalSeconds), 
+        (timer) {
+          // Verifica se o widget ainda está na árvore
+          if (!mounted) {
+             timer.cancel();
+             return;
+          }
+
+          // Chama o controller para enviar o "ping" à API
+          // Isto vai descontar 30s do saldo do cliente
+          ref.read(ticketDetailControllerProvider(widget.ticketId).notifier)
+             .trackTime(); // Certifica-te que este método existe no controller
+      });
+    }
+  }
+
   Future<void> _handlePickAttachment() async {
-    // Access the controller logic to pick file
     final file = await ref
         .read(ticketDetailControllerProvider(widget.ticketId).notifier)
         .pickAttachment();
@@ -51,7 +92,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
 
   Future<void> _handleSendMessage() async {
     final text = _messageController.text.trim();
-    // Validate: must have text OR file
     if ((text.isEmpty && _selectedAttachment == null) || _isSending) return;
 
     setState(() => _isSending = true);
@@ -64,11 +104,11 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       setState(() => _isSending = false);
       if (success) {
         _messageController.clear();
-        _selectedAttachment = null; // Clear attachment after success
+        _selectedAttachment = null;
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Erro: Não foi possível enviar a mensagem.'),
+            content: Text('Erro: Não foi possível enviar. Verifique o tempo de suporte.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -87,12 +127,12 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       setState(() => _isAssigning = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ticket atribuído com sucesso! Pode responder agora.')),
+          const SnackBar(content: Text('Ticket atribuído com sucesso!')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Erro ao atribuir ticket. Verifique a ligação ou se o ticket já tem dono.'),
+            content: Text('Erro ao atribuir ticket.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -123,19 +163,55 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
           final isMyTicket = ticket.user?.id == currentUser?.id;
           final isUnassigned = ticket.assignedTo == null;
 
-          final canReply = !isResolved && (isMyTicket || isAssignedToMe);
+          // LOGICA DE BLOQUEIO DE TEMPO:
+          final ticketOwner = ticket.user;
+          // Se owner for null, assume 0 para segurança
+          final ownerHasTime = (ticketOwner?.dailySupportSeconds ?? 0) > 0;
+
+          // Se não houver tempo, bloqueia tudo
+          final isTimeBlocked = !ownerHasTime;
+
+          // Permissão para responder
+          final canReply = !isResolved && (isMyTicket || isAssignedToMe) && !isTimeBlocked;
 
           return Column(
             children: [
-              // 1. CABEÇALHO FIXO
-              _buildCollapsibleHeader(ticket),
+              // 1. CABEÇALHO (Com badge de tempo)
+              _buildCollapsibleHeader(ticket, ownerHasTime),
 
-              // 2. ÁREA DE SCROLL
+              // 2. CONTEÚDO SCROLLÁVEL
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.only(bottom: 16),
                   children: [
-                    if (isSupporter && isUnassigned && !isResolved)
+                    // Aviso Vermelho se acabou o tempo
+                    if (isTimeBlocked && !isResolved)
+                      Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.timer_off_outlined, color: Colors.red.shade700),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                isSupporter 
+                                  ? 'Cliente sem tempo de suporte restante. Respostas bloqueadas.'
+                                  : 'Esgotou o seu tempo diário (30min). Tente novamente amanhã.',
+                                style: TextStyle(color: Colors.red.shade900, fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Botão para atribuir ticket (apenas staff e se ticket livre)
+                    if (isSupporter && isUnassigned && !isResolved && !isTimeBlocked)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Container(
@@ -179,8 +255,8 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                 ),
               ),
 
-              // 3. INPUT
-              _buildInputSection(canReply, isSupporter, isUnassigned, ticket),
+              // 3. INPUT (Bloqueado se isTimeBlocked for true)
+              _buildInputSection(canReply, isSupporter, isUnassigned, isTimeBlocked, ticket),
             ],
           );
         },
@@ -188,7 +264,7 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     );
   }
 
-  Widget _buildCollapsibleHeader(dynamic ticket) {
+  Widget _buildCollapsibleHeader(dynamic ticket, bool ownerHasTime) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -230,17 +306,46 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
               ticket.formattedDate,
               style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
             ),
+            const Spacer(),
+            // Badge visual do Tempo Restante
+            if (ticket.user != null)
+               Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                 decoration: BoxDecoration(
+                   color: ownerHasTime ? Colors.green.shade50 : Colors.red.shade50,
+                   borderRadius: BorderRadius.circular(12),
+                   border: Border.all(color: ownerHasTime ? Colors.green.shade200 : Colors.red.shade200),
+                 ),
+                 child: Row(
+                   mainAxisSize: MainAxisSize.min,
+                   children: [
+                     Icon(
+                       Icons.timer, 
+                       size: 12, 
+                       color: ownerHasTime ? Colors.green.shade700 : Colors.red.shade700
+                     ),
+                     const SizedBox(width: 4),
+                     Text(
+                       ticket.user!.formattedSupportTime,
+                       style: TextStyle(
+                         fontSize: 10, 
+                         fontWeight: FontWeight.bold,
+                         color: ownerHasTime ? Colors.green.shade800 : Colors.red.shade800
+                       ),
+                     ),
+                   ],
+                 ),
+               ),
           ],
         ),
         children: [
           const Divider(),
           const SizedBox(height: 8),
-          
           Row(
             children: [
               Chip(
                 label: Text(ticket.statusLabel),
-                backgroundColor: ticket.statusColor.withValues(alpha: 0.1),
+                backgroundColor: ticket.statusColor.withOpacity(0.1),
                 labelStyle: TextStyle(color: ticket.statusColor, fontSize: 12, fontWeight: FontWeight.bold),
                 padding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
@@ -248,7 +353,7 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
               const SizedBox(width: 8),
               Chip(
                 label: Text('Prioridade ${ticket.priority.toUpperCase()}'),
-                backgroundColor: ticket.priorityColor.withValues(alpha: 0.1),
+                backgroundColor: ticket.priorityColor.withOpacity(0.1),
                 labelStyle: TextStyle(color: ticket.priorityColor, fontSize: 12, fontWeight: FontWeight.bold),
                 padding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
@@ -344,11 +449,19 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     );
   }
 
-  Widget _buildInputSection(bool canReply, bool isSupporter, bool isUnassigned, dynamic ticket) {
+  Widget _buildInputSection(
+    bool canReply, 
+    bool isSupporter, 
+    bool isUnassigned, 
+    bool isTimeBlocked,
+    dynamic ticket
+  ) {
     String? blockedMessage;
     
     if (ticket.status == 'resolved' || ticket.status == 'closed') {
       blockedMessage = 'Ticket fechado/resolvido.';
+    } else if (isTimeBlocked) {
+      blockedMessage = 'Tempo de suporte diário esgotado.';
     } else if (!canReply) {
       if (isSupporter && isUnassigned) {
         blockedMessage = 'Necessário atribuir ticket.';
@@ -374,7 +487,7 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // PREVIEW DE ANEXO (Se selecionado)
+                  // PREVIEW DE ANEXO
                   if (_selectedAttachment != null)
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -411,7 +524,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      // BOTÃO ANEXAR
                       Container(
                         margin: const EdgeInsets.only(right: 8, bottom: 4),
                         child: IconButton(
@@ -464,11 +576,19 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
+                      Icon(
+                        isTimeBlocked ? Icons.timer_off_outlined : Icons.lock_outline, 
+                        size: 16, 
+                        color: isTimeBlocked ? Colors.red : Colors.grey
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         blockedMessage ?? 'Não pode responder.',
-                        style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                          color: isTimeBlocked ? Colors.red : Colors.grey, 
+                          fontStyle: FontStyle.italic,
+                          fontWeight: isTimeBlocked ? FontWeight.bold : FontWeight.normal
+                        ),
                       ),
                     ],
                   ),
