@@ -30,6 +30,7 @@ dependencies:
   intl: ^0.19.0               # Para formatação de datas e moedas
   equatable: ^2.0.5           # Facilita a comparação de objetos (útil para Models)
   file_picker: ^8.0.0         # Para selecionar anexos
+  path: ^1.9.0                # Para manipular nomes de ficheiros
   
   # --- Formulários ---
   flutter_hooks: ^0.20.5      # Simplifica o uso de controllers em formulários (opcional, mas poderoso)

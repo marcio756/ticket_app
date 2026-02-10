@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/storage_service.dart';
 
 class ApiClient {
@@ -7,6 +8,7 @@ class ApiClient {
   final StorageService _storageService = StorageService();
 
   // ATENÇÃO: Confirma se o teu servidor Laravel está a correr na porta 8000
+  // Se for emulador Android, usa 10.0.2.2 em vez do IP local
   static const String _baseUrl = 'http://192.168.1.69:8000/api';
 
   factory ApiClient() {
@@ -30,7 +32,6 @@ class ApiClient {
   }
 
   void _setupInterceptors() {
-    // 1. Interceptor de Autenticação
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -49,7 +50,6 @@ class ApiClient {
       ),
     );
 
-    // 2. Interceptor de Logs (Isto vai mostrar o erro no terminal)
     _dio.interceptors.add(
       LogInterceptor(
         request: true,
@@ -63,4 +63,25 @@ class ApiClient {
   }
 
   Dio get client => _dio;
+
+  // --- MÉTODOS WRAPPER (CORREÇÃO DOS ERROS DE DATASOURCE) ---
+
+  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
+    return await _dio.get(path, queryParameters: queryParameters);
+  }
+
+  Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+    return await _dio.post(path, data: data, queryParameters: queryParameters);
+  }
+
+  Future<Response> put(String path, {dynamic data}) async {
+    return await _dio.put(path, data: data);
+  }
+
+  Future<Response> delete(String path) async {
+    return await _dio.delete(path);
+  }
 }
+
+// Provider global para injeção de dependência
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());

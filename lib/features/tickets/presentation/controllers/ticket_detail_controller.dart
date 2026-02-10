@@ -1,56 +1,87 @@
-import 'package:flutter/foundation.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/ticket_remote_datasource.dart';
 import '../../data/models/ticket_model.dart';
+import '../../../../core/network/api_client.dart';
 
-final ticketDetailControllerProvider = StateNotifierProvider.autoDispose
-    .family<TicketDetailController, AsyncValue<TicketModel?>, int>((ref, ticketId) {
-  return TicketDetailController(
-    ticketId: ticketId,
-    dataSource: TicketRemoteDataSource(),
-  );
-});
-
+// State to hold the ticket and any UI temporary states if needed
 class TicketDetailController extends StateNotifier<AsyncValue<TicketModel?>> {
+  final TicketRemoteDatasource _datasource;
   final int ticketId;
-  final TicketRemoteDataSource _dataSource;
 
-  TicketDetailController({
-    required this.ticketId,
-    required TicketRemoteDataSource dataSource,
-  })  : _dataSource = dataSource,
-        super(const AsyncValue.loading()) {
-    loadTicket();
+  TicketDetailController(this._datasource, this.ticketId) : super(const AsyncValue.loading()) {
+    _loadTicket();
   }
 
-  Future<void> loadTicket() async {
+  Future<void> _loadTicket() async {
     try {
-      final ticket = await _dataSource.getTicketDetails(ticketId);
+      final ticket = await _datasource.getTicket(ticketId);
       state = AsyncValue.data(ticket);
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
     }
   }
 
-  Future<bool> addMessage(String message) async {
+  /// Adds a message, optionally with an attachment
+  Future<bool> addMessage(String text, {File? attachment}) async {
     try {
-      await _dataSource.sendMessage(ticketId, message);
-      await loadTicket();
+      if (text.isEmpty && attachment == null) return false;
+
+      // Optimistic update or waiting for response depends on preference.
+      // Here we wait to ensure upload success.
+      final newMessage = await _datasource.addMessage(ticketId, text, attachment: attachment);
+      
+      // Update local state with the new message
+      state.whenData((ticket) {
+        if (ticket != null) {
+          final updatedMessages = [...ticket.messages, newMessage];
+          // Re-sort if necessary, assuming backend returns correct order
+          updatedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          
+          state = AsyncValue.data(ticket.copyWith(messages: updatedMessages));
+        }
+      });
       return true;
     } catch (e) {
-      debugPrint('Error sending message: $e');
+      // Log error
       return false;
     }
   }
 
   Future<bool> assignToMe() async {
     try {
-      await _dataSource.assignTicketToMe(ticketId);
-      await loadTicket();
-      return true;
+      final success = await _datasource.assignTicketToMe(ticketId);
+      if (success) {
+        await _loadTicket(); // Reload to get updated assignee
+      }
+      return success;
     } catch (e) {
-      debugPrint('Error assigning ticket: $e');
       return false;
     }
   }
+
+  /// Helper to pick a file
+  Future<File?> pickAttachment() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any, // Allow any file type (.exe, .mp4, etc.)
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        return File(result.files.single.path!);
+      }
+      return null;
+    } catch (e) {
+      // Handle permission errors or picker errors
+      return null;
+    }
+  }
 }
+
+final ticketDetailControllerProvider = StateNotifierProvider.family<TicketDetailController, AsyncValue<TicketModel?>, int>((ref, ticketId) {
+  final client = ref.watch(apiClientProvider);
+  final datasource = TicketRemoteDatasource(client);
+  return TicketDetailController(datasource, ticketId);
+});

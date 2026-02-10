@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart'; // Importante para as Cores
+import 'package:flutter/material.dart';
 import '../../../auth/data/models/user_model.dart';
 import 'ticket_message_model.dart';
 
@@ -27,22 +27,48 @@ class TicketModel {
 
   factory TicketModel.fromJson(Map<String, dynamic> json) {
     return TicketModel(
-      id: json['id'],
-      title: json['title'] ?? 'Sem Título',
-      description: json['description'] ?? '',
-      status: json['status'] ?? 'open',
-      priority: json['priority'] ?? 'medium',
+      id: json['id'] is int ? json['id'] : 0,
+      title: json['title']?.toString() ?? 'Sem Título',
+      description: json['description']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'open',
+      priority: json['priority']?.toString() ?? 'medium',
       user: json['user'] != null ? UserModel.fromJson(json['user']) : null,
       assignedTo: json['assigned_to'] != null ? UserModel.fromJson(json['assigned_to']) : null,
       messages: (json['messages'] as List?)
               ?.map((e) => TicketMessageModel.fromJson(e))
               .toList() ??
           [],
-      createdAt: DateTime.parse(json['created_at']),
+      // Proteção contra data nula
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
     );
   }
 
-  // --- GETTERS AUXILIARES PARA UI (Resolve erros do TicketCard) ---
+  /// Método copyWith para permitir atualizações de estado imutáveis
+  TicketModel copyWith({
+    int? id,
+    String? title,
+    String? description,
+    String? status,
+    String? priority,
+    UserModel? user,
+    UserModel? assignedTo,
+    List<TicketMessageModel>? messages,
+    DateTime? createdAt,
+  }) {
+    return TicketModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      status: status ?? this.status,
+      priority: priority ?? this.priority,
+      user: user ?? this.user,
+      assignedTo: assignedTo ?? this.assignedTo,
+      messages: messages ?? this.messages,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  // --- GETTERS AUXILIARES ---
 
   String get statusLabel {
     switch (status) {
@@ -69,7 +95,6 @@ class TicketModel {
   }
 
   String get formattedDate {
-    // Formatação simples YYYY-MM-DD
     return "${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}";
   }
 }

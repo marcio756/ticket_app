@@ -1,3 +1,4 @@
+import 'dart:io'; // Import for File
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/ticket_detail_controller.dart';
@@ -16,6 +17,10 @@ class TicketDetailScreen extends ConsumerStatefulWidget {
 
 class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
   final _messageController = TextEditingController();
+  
+  // Local state to manage the selected file before sending
+  File? _selectedAttachment;
+  
   bool _isSending = false;
   bool _isAssigning = false;
 
@@ -25,24 +30,45 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     super.dispose();
   }
 
+  Future<void> _handlePickAttachment() async {
+    // Access the controller logic to pick file
+    final file = await ref
+        .read(ticketDetailControllerProvider(widget.ticketId).notifier)
+        .pickAttachment();
+
+    if (file != null) {
+      setState(() {
+        _selectedAttachment = file;
+      });
+    }
+  }
+
+  void _removeAttachment() {
+    setState(() {
+      _selectedAttachment = null;
+    });
+  }
+
   Future<void> _handleSendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _isSending) return;
+    // Validate: must have text OR file
+    if ((text.isEmpty && _selectedAttachment == null) || _isSending) return;
 
     setState(() => _isSending = true);
     
     final success = await ref
         .read(ticketDetailControllerProvider(widget.ticketId).notifier)
-        .addMessage(text);
+        .addMessage(text, attachment: _selectedAttachment);
 
     if (mounted) {
       setState(() => _isSending = false);
       if (success) {
         _messageController.clear();
+        _selectedAttachment = null; // Clear attachment after success
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Erro: Não tem permissão para responder a este ticket.'),
+            content: Text('Erro: Não foi possível enviar a mensagem.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -93,23 +119,22 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
 
           final isResolved = ticket.status == 'resolved' || ticket.status == 'closed';
           final isSupporter = currentUser?.isSupporter ?? false;
-          final isUnassigned = ticket.assignedTo == null;
           final isAssignedToMe = ticket.assignedTo?.id == currentUser?.id;
           final isMyTicket = ticket.user?.id == currentUser?.id;
+          final isUnassigned = ticket.assignedTo == null;
 
           final canReply = !isResolved && (isMyTicket || isAssignedToMe);
 
           return Column(
             children: [
-              // 1. CABEÇALHO FIXO (Não faz scroll com as mensagens)
+              // 1. CABEÇALHO FIXO
               _buildCollapsibleHeader(ticket),
 
-              // 2. ÁREA DE SCROLL (Apenas para mensagens e avisos)
+              // 2. ÁREA DE SCROLL
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.only(bottom: 16),
                   children: [
-                    // Banner de Suporte
                     if (isSupporter && isUnassigned && !isResolved)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -149,13 +174,12 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                         ),
                       ),
                     
-                    // Lista de Mensagens
                     _buildChatSection(ticket, currentUser?.id),
                   ],
                 ),
               ),
 
-              // 3. INPUT (Fixo no fundo)
+              // 3. INPUT
               _buildInputSection(canReply, isSupporter, isUnassigned, ticket),
             ],
           );
@@ -164,14 +188,12 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
     );
   }
 
-  /// O cabeçalho agora está desenhado para ficar fixo no topo.
   Widget _buildCollapsibleHeader(dynamic ticket) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            // CORRIGIDO: withOpacity -> withValues
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 4),
@@ -180,12 +202,10 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       ),
       child: ExpansionTile(
         initiallyExpanded: true, 
-        // CORRIGIDO: Removido o callback onExpansionChanged e a variável _isHeaderExpanded
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         shape: const Border(), 
         
-        // TÍTULO (Sempre visível)
         title: Text(
           ticket.title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -212,8 +232,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
             ),
           ],
         ),
-        
-        // CONTEÚDO (Escondido ao minimizar)
         children: [
           const Divider(),
           const SizedBox(height: 8),
@@ -222,7 +240,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
             children: [
               Chip(
                 label: Text(ticket.statusLabel),
-                // CORRIGIDO: withOpacity -> withValues
                 backgroundColor: ticket.statusColor.withValues(alpha: 0.1),
                 labelStyle: TextStyle(color: ticket.statusColor, fontSize: 12, fontWeight: FontWeight.bold),
                 padding: EdgeInsets.zero,
@@ -231,7 +248,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
               const SizedBox(width: 8),
               Chip(
                 label: Text('Prioridade ${ticket.priority.toUpperCase()}'),
-                // CORRIGIDO: withOpacity -> withValues
                 backgroundColor: ticket.priorityColor.withValues(alpha: 0.1),
                 labelStyle: TextStyle(color: ticket.priorityColor, fontSize: 12, fontWeight: FontWeight.bold),
                 padding: EdgeInsets.zero,
@@ -240,8 +256,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          
-          // Descrição
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -264,7 +278,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
               ],
             ),
           ),
-          
           const SizedBox(height: 12),
           _buildUserInfos(ticket),
         ],
@@ -351,48 +364,97 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
-            // CORRIGIDO: withOpacity -> withValues
             BoxShadow(blurRadius: 4, color: Colors.black.withValues(alpha: 0.05))
         ],
         border: const Border(top: BorderSide(color: Colors.black12)),
       ),
       child: SafeArea(
         child: canReply
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Escrever mensagem...',
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  // PREVIEW DE ANEXO (Se selecionado)
+                  if (_selectedAttachment != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade100),
                       ),
-                      maxLines: 4,
-                      minLines: 1,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.attach_file, size: 20, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _selectedAttachment!.path.split('/').last,
+                              style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          InkWell(
+                            onTap: _removeAttachment,
+                            child: const Padding(
+                              padding: EdgeInsets.all(4.0),
+                              child: Icon(Icons.close, size: 18, color: Colors.blue),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.blue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: _isSending
-                      ? const Padding(
-                          padding: EdgeInsets.all(10.0),
-                          child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                          onPressed: _handleSendMessage,
+
+                  // ÁREA DE TEXTO E BOTÕES
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // BOTÃO ANEXAR
+                      Container(
+                        margin: const EdgeInsets.only(right: 8, bottom: 4),
+                        child: IconButton(
+                          icon: Icon(Icons.attach_file, color: Colors.grey.shade600),
+                          onPressed: _handlePickAttachment,
+                          tooltip: 'Anexar Ficheiro',
                         ),
+                      ),
+                      
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: InputDecoration(
+                            hintText: _selectedAttachment != null ? 'Adicionar comentário...' : 'Escrever mensagem...',
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          ),
+                          maxLines: 4,
+                          minLines: 1,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                        child: _isSending
+                          ? const Padding(
+                              padding: EdgeInsets.all(10.0),
+                              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                              onPressed: _handleSendMessage,
+                            ),
+                      ),
+                    ],
                   ),
                 ],
               )

@@ -19,19 +19,32 @@ class TicketMessageModel {
   });
 
   factory TicketMessageModel.fromJson(Map<String, dynamic> json) {
+    // Helper para criar utilizador desconhecido caso venha null da API
+    UserModel safeUser() {
+      if (json['user'] != null) {
+        return UserModel.fromJson(json['user']);
+      }
+      return UserModel(
+        id: 0, 
+        name: 'Utilizador Desconhecido', 
+        email: '', 
+        role: 'customer'
+      );
+    }
+
     return TicketMessageModel(
-      id: json['id'],
-      message: json['message'] ?? '',
-      attachmentUrl: json['attachment_url'],
-      user: UserModel.fromJson(json['user']),
-      createdAt: DateTime.parse(json['created_at']),
-      createdAtHuman: json['created_at_human'] ?? '',
+      id: json['id'] is int ? json['id'] : 0,
+      message: json['message']?.toString() ?? '',
+      // Tenta ler 'attachment_url' (Resource) ou 'attachment_path' (Raw Model)
+      attachmentUrl: json['attachment_url']?.toString() ?? json['attachment_path']?.toString(),
+      user: safeUser(),
+      // Tenta fazer parse da data, se falhar usa data atual
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+      createdAtHuman: json['created_at_human']?.toString() ?? '',
     );
   }
 
-  // Helper para verificar se a mensagem é minha (do utilizador logado)
   bool isMe(int myUserId) => user.id == myUserId;
 
-  // Formatação de hora para o chat (Ex: 14:30)
   String get timeFormatted => DateFormat('HH:mm').format(createdAt);
 }
