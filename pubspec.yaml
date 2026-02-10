@@ -1,0 +1,48 @@
+name: ticket_app
+description: "A mobile application for the Tickets system built with Flutter."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.10.7 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- UI & Icons ---
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1        # Para tipografia consistente (opcional, mas recomendado)
+
+  # --- Networking & APIs ---
+  dio: ^5.4.3                 # Cliente HTTP robusto para comunicar com o Laravel
+  
+  # --- Armazenamento Local ---
+  flutter_secure_storage: ^9.2.2  # Para guardar o Token de autenticação de forma segura
+
+  # --- Gestão de Estado (State Management) ---
+  flutter_riverpod: ^2.5.1    # A solução mais moderna e segura para gestão de estado
+
+  # --- Navegação ---
+  go_router: ^14.0.1          # Gestão de rotas declarativa (ideal para Deeplinking e Auth Guards)
+
+  # --- Utilitários ---
+  intl: ^0.19.0               # Para formatação de datas e moedas
+  equatable: ^2.0.5           # Facilita a comparação de objetos (útil para Models)
+  file_picker: ^8.0.0         # Para selecionar anexos
+  
+  # --- Formulários ---
+  flutter_hooks: ^0.20.5      # Simplifica o uso de controllers em formulários (opcional, mas poderoso)
+  hooks_riverpod: ^2.5.1      # Integração de Hooks com Riverpod
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+
+flutter:
+  uses-material-design: true
+
+  # assets:
+  #   - assets/images/
