@@ -17,7 +17,6 @@ class TicketRemoteDataSource {
         '/tickets',
         queryParameters: queryParameters,
       );
-      // Adjust handling for Laravel pagination structure or direct list
       final List<dynamic> data = response.data['data'] ?? response.data;
       return data.map((json) => TicketModel.fromJson(json)).toList();
     } catch (e) {
@@ -29,7 +28,6 @@ class TicketRemoteDataSource {
   Future<TicketModel> getTicketDetails(int ticketId) async {
     try {
       final response = await _apiClient.client.get('/tickets/$ticketId');
-      // Standard Laravel resources wrap data in a 'data' key
       final data = response.data['data'] ?? response.data;
       return TicketModel.fromJson(data);
     } catch (e) {
@@ -41,7 +39,6 @@ class TicketRemoteDataSource {
   Future<TicketModel> createTicket(Map<String, dynamic> ticketData) async {
     try {
       final response = await _apiClient.client.post('/tickets', data: ticketData);
-      // Assuming the backend returns the created ticket wrapped in 'data'
       final data = response.data['data'] ?? response.data;
       return TicketModel.fromJson(data);
     } catch (e) {
@@ -52,7 +49,6 @@ class TicketRemoteDataSource {
   /// Sends a new message to a ticket (with optional attachment).
   Future<TicketMessageModel> sendMessage(int ticketId, String message, {File? attachment}) async {
     try {
-      // If there is an attachment, use FormData
       if (attachment != null) {
         final formData = FormData.fromMap({
           'message': message,
@@ -66,7 +62,6 @@ class TicketRemoteDataSource {
         final data = response.data['data'] ?? response.data;
         return TicketMessageModel.fromJson(data);
       } else {
-        // Simple JSON request for text-only messages
         final response = await _apiClient.client.post(
           '/tickets/$ticketId/messages',
           data: {'message': message},
@@ -74,6 +69,15 @@ class TicketRemoteDataSource {
         final data = response.data['data'] ?? response.data;
         return TicketMessageModel.fromJson(data);
       }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Atribui o ticket ao utilizador autenticado.
+  Future<void> assignTicketToMe(int ticketId) async {
+    try {
+      await _apiClient.client.post('/tickets/$ticketId/assign');
     } catch (e) {
       rethrow;
     }

@@ -3,11 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/ticket_remote_datasource.dart';
 import '../../data/models/ticket_model.dart';
 
-/// Provider for managing the details of a specific ticket.
-/// The family modifier allows passing the ticketId, and we inject the DataSource.
 final ticketDetailControllerProvider = StateNotifierProvider.autoDispose
     .family<TicketDetailController, AsyncValue<TicketModel?>, int>((ref, ticketId) {
-  // CORREÇÃO: Passar explicitamente o ID e o DataSource para o construtor
   return TicketDetailController(
     ticketId: ticketId,
     dataSource: TicketRemoteDataSource(),
@@ -18,7 +15,6 @@ class TicketDetailController extends StateNotifier<AsyncValue<TicketModel?>> {
   final int ticketId;
   final TicketRemoteDataSource _dataSource;
 
-  // Constructor with named parameters for better clarity
   TicketDetailController({
     required this.ticketId,
     required TicketRemoteDataSource dataSource,
@@ -27,7 +23,6 @@ class TicketDetailController extends StateNotifier<AsyncValue<TicketModel?>> {
     loadTicket();
   }
 
-  /// Fetches ticket details from the remote source.
   Future<void> loadTicket() async {
     try {
       final ticket = await _dataSource.getTicketDetails(ticketId);
@@ -37,8 +32,6 @@ class TicketDetailController extends StateNotifier<AsyncValue<TicketModel?>> {
     }
   }
 
-  /// Sends a new message and refreshes the ticket data.
-  /// Returns true if successful, false otherwise.
   Future<bool> addMessage(String message) async {
     try {
       await _dataSource.sendMessage(ticketId, message);
@@ -46,6 +39,17 @@ class TicketDetailController extends StateNotifier<AsyncValue<TicketModel?>> {
       return true;
     } catch (e) {
       debugPrint('Error sending message: $e');
+      return false;
+    }
+  }
+
+  Future<bool> assignToMe() async {
+    try {
+      await _dataSource.assignTicketToMe(ticketId);
+      await loadTicket();
+      return true;
+    } catch (e) {
+      debugPrint('Error assigning ticket: $e');
       return false;
     }
   }
