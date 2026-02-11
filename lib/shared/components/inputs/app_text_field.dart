@@ -24,6 +24,7 @@ class AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min, // <--- ADICIONADO AQUI
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/user_list_controller.dart';
 import 'user_form_screen.dart';
+import '../../../../shared/components/inputs/app_text_field.dart';
 
 class UserListScreen extends ConsumerStatefulWidget {
   const UserListScreen({super.key});
@@ -13,16 +14,15 @@ class UserListScreen extends ConsumerStatefulWidget {
 
 class _UserListScreenState extends ConsumerState<UserListScreen> {
   final _searchController = TextEditingController();
-  Timer? _debounce; // Variável para controlar o tempo
+  Timer? _debounce;
 
   @override
   void dispose() {
-    _debounce?.cancel(); // Cancelar timer se sair do ecrã
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  // Função de pesquisa com atraso (Debounce)
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     
@@ -118,20 +118,49 @@ class _UserListScreenState extends ConsumerState<UserListScreen> {
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref, int userId) {
+    final passwordController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Utilizador?'),
-        content: const Text('Esta ação não pode ser revertida.'),
+        content: SingleChildScrollView( 
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Esta ação não pode ser revertida. Insira a sua password para confirmar.'),
+              const SizedBox(height: 16),
+              AppTextField(
+                controller: passwordController,
+                label: 'A sua password',
+                obscureText: true,
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              passwordController.dispose();
+              Navigator.pop(context);
+            },
             child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () async {
+              if (passwordController.text.isEmpty) return;
+              
+              final pwd = passwordController.text;
               Navigator.pop(context);
-              await ref.read(userListControllerProvider.notifier).deleteUser(userId);
+              
+              final messenger = ScaffoldMessenger.of(context);
+              final success = await ref.read(userListControllerProvider.notifier).deleteUser(userId, pwd);
+              
+              if (!success) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Falha ao eliminar. Verifique a sua password ou as regras do sistema.'), backgroundColor: Colors.red),
+                );
+              }
             },
             child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
           ),

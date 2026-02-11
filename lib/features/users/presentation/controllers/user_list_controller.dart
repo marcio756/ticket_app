@@ -7,6 +7,7 @@ final userListControllerProvider =
   return UserListController();
 });
 
+/// Manages the state for the list of users (Admin/Support only).
 class UserListController extends StateNotifier<AsyncValue<List<UserModel>>> {
   UserListController() : super(const AsyncValue.loading()) {
     loadUsers();
@@ -30,32 +31,30 @@ class UserListController extends StateNotifier<AsyncValue<List<UserModel>>> {
     }
   }
 
-  // --- NOVO: Criar Utilizador ---
   Future<bool> createUser(Map<String, dynamic> userData) async {
     try {
       await _apiClient.client.post('/users', data: userData);
-      await loadUsers(); // Atualiza a lista
+      await loadUsers();
       return true;
     } catch (e) {
-      // Podes adicionar tratamento de erro mais específico aqui (ex: email duplicado)
       return false;
     }
   }
 
-  // --- NOVO: Editar Utilizador ---
   Future<bool> updateUser(int id, Map<String, dynamic> userData) async {
     try {
       await _apiClient.client.put('/users/$id', data: userData);
-      await loadUsers(); // Atualiza a lista
+      await loadUsers();
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  Future<bool> deleteUser(int userId) async {
+  Future<bool> deleteUser(int userId, String adminPassword) async {
     try {
-      await _apiClient.client.delete('/users/$userId');
+      // Enviar a password do admin no body do delete para validação
+      await _apiClient.client.delete('/users/$userId', data: {'admin_password': adminPassword});
       await loadUsers(); 
       return true;
     } catch (e) {

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/storage_service.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
@@ -11,6 +12,7 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   );
 });
 
+/// Gere o estado de autenticação e sessão do utilizador logado.
 class AuthController extends StateNotifier<AuthState> {
   final AuthRemoteDataSource _authRemoteDataSource;
   final StorageService _storageService;
@@ -28,15 +30,12 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final token = await _storageService.getToken();
       if (token != null) {
-        // Opcional: Validar o token batendo na API /user ou assumir válido
-        // Aqui vamos buscar o perfil para garantir que o token funciona
         final user = await _authRemoteDataSource.getUserProfile();
         state = state.copyWith(status: AuthStatus.authenticated, user: user);
       } else {
         state = state.copyWith(status: AuthStatus.unauthenticated);
       }
     } catch (e) {
-      // Se o token for inválido (401), apagamos
       await _storageService.deleteToken();
       state = state.copyWith(status: AuthStatus.unauthenticated);
     }
@@ -51,7 +50,6 @@ class AuthController extends StateNotifier<AuthState> {
       final user = result['user'];
       final token = result['token'];
 
-      // Guarda o token no telemóvel
       await _storageService.saveToken(token);
 
       state = state.copyWith(
@@ -73,10 +71,27 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       await _authRemoteDataSource.logout();
     } catch (_) {
-      // Ignora erro de rede no logout, forçamos o logout local
     } finally {
       await _storageService.deleteToken();
       state = state.copyWith(status: AuthStatus.unauthenticated, user: null);
+    }
+  }
+
+  /// Atualiza o perfil do utilizador (comunica com a API e altera o estado atual)
+  Future<bool> updateProfile(String name, String email, {File? avatar, String? currentPassword, String? newPassword, String? newPasswordConfirmation}) async {
+    try {
+      final updatedUser = await _authRemoteDataSource.updateProfile(
+        name, 
+        email, 
+        avatar: avatar,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        newPasswordConfirmation: newPasswordConfirmation,
+      );
+      state = state.copyWith(user: updatedUser);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }
