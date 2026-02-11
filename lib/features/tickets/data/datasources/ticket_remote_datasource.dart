@@ -78,4 +78,17 @@ class TicketRemoteDatasource {
       return null;
     }
   }
+
+  Future<bool> updateStatus(int ticketId, String status) async {
+    try {
+      // Faz um pedido PATCH para atualizar parcialmente o ticket na API
+      await _client.patch(
+        '/tickets/$ticketId', 
+        data: {'status': status},
+      );
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 }

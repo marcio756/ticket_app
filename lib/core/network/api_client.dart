@@ -64,7 +64,7 @@ class ApiClient {
 
   Dio get client => _dio;
 
-  // --- MÉTODOS WRAPPER (CORREÇÃO DOS ERROS DE DATASOURCE) ---
+  // --- MÉTODOS WRAPPER ---
 
   Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
     return await _dio.get(path, queryParameters: queryParameters);
@@ -76,6 +76,10 @@ class ApiClient {
 
   Future<Response> put(String path, {dynamic data}) async {
     return await _dio.put(path, data: data);
+  }
+
+  Future<Response> patch(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+    return await _dio.patch(path, data: data, queryParameters: queryParameters);
   }
 
   Future<Response> delete(String path) async {

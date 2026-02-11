@@ -67,21 +67,25 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
 
     setState(() => _isSending = true);
 
+    // Captura o messenger antes do gap assíncrono (resolve o aviso do linter)
+    final messenger = ScaffoldMessenger.of(context);
+
     final success = await ref
         .read(ticketDetailControllerProvider(widget.ticketId).notifier)
         .addMessage(cleanText, attachment: attachment);
 
-    if (mounted) {
-      setState(() => _isSending = false);
-      if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Erro: Não foi possível enviar. Verifique o tempo de suporte.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (!mounted) return;
+
+    setState(() => _isSending = false);
+    
+    if (!success) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Erro: Não foi possível enviar. Verifique o tempo de suporte.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -89,24 +93,28 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
   Future<void> _handleAssignToMe() async {
     setState(() => _isAssigning = true);
 
+    // Captura o messenger antes do gap assíncrono (resolve o aviso do linter)
+    final messenger = ScaffoldMessenger.of(context);
+
     final success = await ref
         .read(ticketDetailControllerProvider(widget.ticketId).notifier)
         .assignToMe();
 
-    if (mounted) {
-      setState(() => _isAssigning = false);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ticket atribuído com sucesso!')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao atribuir ticket.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (!mounted) return;
+
+    setState(() => _isAssigning = false);
+    
+    if (success) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Ticket atribuído com sucesso!')),
+      );
+    } else {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao atribuir ticket.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -121,6 +129,44 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
       appBar: AppBar(
         title: const Text('Detalhes do Ticket'),
         elevation: 0,
+        actions: [
+          if (currentUser != null && currentUser.isSupporter)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: 'Alterar Estado',
+              onSelected: (newStatus) async {
+                // Captura o messenger antes do gap assíncrono
+                final messenger = ScaffoldMessenger.of(context);
+                
+                final success = await ref
+                    .read(ticketDetailControllerProvider(widget.ticketId).notifier)
+                    .updateStatus(newStatus);
+                
+                if (!mounted) return;
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'Estado atualizado com sucesso!' : 'Erro ao atualizar estado.'),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                  ),
+                );
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(
+                  value: 'open',
+                  child: Text('Aberto'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'resolved',
+                  child: Text('Resolvido'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'closed',
+                  child: Text('Fechado'),
+                ),
+              ],
+            ),
+        ],
       ),
       body: ticketState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -130,17 +176,13 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
             return const Center(child: Text('Ticket não encontrado'));
           }
 
-          // Business Logic: Check if time is blocked
           final ticketOwner = ticket.user;
           final ownerHasTime = (ticketOwner?.dailySupportSeconds ?? 0) > 0;
           final isTimeBlocked = !ownerHasTime;
 
           return Column(
             children: [
-              // 1. Ticket Header Information
               TicketDetailHeader(ticket: ticket),
-
-              // 2. Scrollable Content (Messages & Status Banners)
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -159,8 +201,6 @@ class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
                   ],
                 ),
               ),
-
-              // 3. Input Area
               TicketInputArea(
                 ticket: ticket,
                 currentUser: currentUser,

@@ -63,6 +63,25 @@ class TicketDetailController extends StateNotifier<AsyncValue<TicketModel?>> {
     }
   }
 
+  /// Atualiza o estado do ticket na API e localmente
+  Future<bool> updateStatus(String newStatus) async {
+    try {
+      final success = await _datasource.updateStatus(ticketId, newStatus);
+      
+      if (success) {
+        state.whenData((ticket) {
+          if (ticket != null) {
+            // Atualiza apenas o status do ticket atual mantendo os restantes dados
+            state = AsyncValue.data(ticket.copyWith(status: newStatus));
+          }
+        });
+      }
+      return success;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<bool> assignToMe() async {
     try {
       final success = await _datasource.assignTicketToMe(ticketId);
